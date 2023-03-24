@@ -59,26 +59,37 @@ SELECT *
 FROM (SELECT DEPTNO, JOB, SAL FROM EMP)
 PIVOT (MAX(SAL) FOR DEPTNO IN (10,20,30))
 ORDER BY JOB
-; 
+;   -- PIVOT 
 
-SELECT
-	DEPTNO
-		,
-	MAX(DECODE(JOB, 'CLERK', SAL)) AS 'CLERK'
-		,
-	MAX(DECODE(JOB, 'SALESMAN', SAL)) AS 'SALES'
-		,
-	MAX(DECODE(JOB, 'PRESIDENT', SAL)) AS 'PRESI'
-		,
-	MAX(DECODE(JOB, 'MANAGER', SAL)) AS 'MGR'
-		,
-	MAX(DECODE(JOB, 'ANALYST', SAL)) AS 'ANA'
+-- 별칭 또는 오라클 객체명의 경우, 쌍따옴표를 사용하지 않는 경우
+-- 기본값이 대문자로 표기
+SELECT 	DEPTNO
+		, MAX(DECODE(JOB, 'CLERK', SAL)) AS CLERK
+		, MAX(DECODE(JOB, 'SALESMAN', SAL)) AS SALES
+		, MAX(DECODE(JOB, 'PRESIDENT', SAL)) AS PRESI
+		, MAX(DECODE(JOB, 'MANAGER', SAL)) AS MGR
+		, MAX(DECODE(JOB, 'ANALYST', SAL)) AS ANA
 FROM
 	EMP
 GROUP BY
 	DEPTNO
 ORDER BY
 	DEPTNO
+;
+
+-- UNPIVOT 방법 1 : 인라인뷰 별칭 소문자 문자열
+SELECT *
+FROM (SELECT DEPTNO
+		, MAX(DECODE(JOB, 'CLERK', SAL)) AS "CLERK"
+		, MAX(DECODE(JOB, 'SALESMAN', SAL)) AS "SALES"
+		, MAX(DECODE(JOB, 'PRESIDENT', SAL)) AS "PRESI"
+		, MAX(DECODE(JOB, 'MANAGER', SAL)) AS "MGR"
+		, MAX(DECODE(JOB, 'ANALYST', SAL)) AS "ANA"
+FROM EMP
+GROUP BY DEPTNO
+ORDER BY DEPTNO)
+UNPIVOT(SAL FOR JOB IN("CLERK", "SALES", "PRESI", "MGR", "ANA"))
+ORDER BY DEPTNO, JOB
 ;
 
 SELECT DEPTNO , JOB , COUNT(EMPNO) , MAX(SAL) , SUM(SAL) , AVG(SAL)
@@ -114,3 +125,214 @@ ORDER BY
 	DEPTNO,
 	JOB
 	;
+	
+
+CREATE TABLE ... AS (SELECT ~ ); 
+CREATE VIEW ... AS (SELECT ~);
+
+
+
+/*
+ JOIN ... ON ... 구문 : 두 개의 테이블의 컬럼을 연결
+ */
+
+/*
+ INNER_JOIN = 1:1 관계로 테이블간 연결을 통해 추가 정보를 제공하는 목적이 대부분
+ */ 
+
+SELECT *
+FROM EMP e JOIN DEPT d 
+	ON e.DEPTNO = d.DEPTNO
+	;
+
+SELECT
+	E.EMPNO,
+	E.ENAME,
+	E.JOB,
+	E.HIREDATE,
+	E.SAL ,
+	E.COMM,
+	D.DEPTNO,
+	D.DNAME,
+	D.LOC
+FROM EMP e JOIN DEPT D    -- INNER JOIN
+ON E.DEPTNO = D.DEPTNO    -- 직원과 부서는 1:1 관계
+;
+
+-- SAL 구간을 이용하여 해당 구간에 해당되는 직원을 연결 (1:1관계)
+SELECT E.EMPNO ,
+	E.ENAME ,
+	S.GRADE AS GRADE,
+	E.JOB,
+	E.HIREDATE,
+	E.SAL ,
+	E.COMM,
+	D.DEPTNO,
+	D.DNAME,
+	D.LOC
+FROM
+	EMP e ,
+	SALGRADE s
+WHERE E.SAL BETWEEN S.LOSAL AND S.HISAL
+;  --오류
+
+
+WITH EMP_SAL AS (SELECT E.EMPNO ,
+	E.ENAME ,
+	S.GRADE AS GRADE,
+	E.JOB,
+	E.HIREDATE,
+	E.SAL ,
+	E.COMM,
+	D.DEPTNO,
+	D.DNAME,
+	D.LOC
+FROM
+	EMP e ,
+	SALGRADE s
+WHERE E.SAL BETWEEN S.LOSAL AND S.HISAL)
+, EMP_DEPT AS ()
+
+SELECT *
+FROM EMP_SAL, EMP_DEPT
+;
+
+
+-- SELF-JOIN : 하나의 테이블에 성질이 동일한 2개 이상의 칼럼의 관계를 이용하여
+-- 원하는 레코드의 관계를 산출하고 싶은 경우 사용
+
+SELECT E1.EMPNO
+	, E1.ENAME 
+	, E1.MGR
+	, E2.EMPNO AS MGR_EMPNO
+	, E2.ENAME AS MGR_ENAME
+FROM EMP E1 JOIN EMP E2
+	ON E1.MGR = E2.EMPNO   -- EMP 테이블에 사번의 이름은 있으나, MGR 이름은 없으니 연결
+;  -- NULL이 필요 없는 1:1관계에서
+
+/*모든 MGR정보를 기준으로*/
+
+SELECT E1.EMPNO
+	, E1.ENAME 
+	, E1.MGR
+	, E2.EMPNO AS MGR_EMPNO
+	, E2.ENAME AS MGR_ENAME
+FROM EMP E1 LEFT JOIN EMP E2
+	ON E1.MGR = E2.EMPNO
+;  -- E1쪽이 다 나오며, NULL값이 필요할 떄 쓰는 LEFT JOIN!
+
+
+-- right-join : 직원 사번과 상사 사번의 관계를 계층적으로 확인할 수 있는 방법
+SELECT E1.EMPNO AS E1_EMPNO
+	, E1.ENAME AS E1_ENAME
+	, E1.MGR AS E1_MGR
+	, E2.EMPNO AS E2_EMPNO
+	, E2.ENAME AS E2_ENAME
+FROM EMP E1 RIGHT JOIN EMP E2
+	ON E1.MGR = E2.EMPNO
+; -- E2.EMPNO가 기준. 매니저의 직원들이 계층적으로 표시가 됨.
+
+SELECT E1.EMPNO AS E1_EMPNO
+	, E1.ENAME AS E1_ENAME
+	, E1.MGR AS E1_MGR
+	, E2.EMPNO AS E2_EMPNO
+	, E2.ENAME AS E2_ENAME
+FROM EMP E1 FULL OUTER JOIN EMP E2
+	ON E1.MGR = E2.EMPNO
+; -- 잘 안쓰는;; MGR=NULL의 사원도 출력 = KING
+
+-- 다중행
+SELECT *
+FROM EMP E1 LEFT JOIN DEPT D
+		ON E1.DEPTNO = D.DEPTNO 
+	LEFT JOIN SALGRADE s
+		ON E1.SAL BETWEEN S.LOSAL AND S.HISAL
+	LEFT JOIN EMP e2
+		ON E1.MGR = E2.EMPNO 
+;
+
+/*
+ * SUB-QUERY 서브 쿼리 (쿼리 문에 사용되는 쿼리) 
+ * 서브쿼리 결과 : 단일 값 출력, 다중행(하나의 컬럼에 행 배열), 다중열(두 개 이상의 컬럼별 행 배열)
+ */
+SELECT DEPTNO, MAX(SAL)
+FROM EMP 
+GROUP BY DEPTNO
+; --조건이 될 서브쿼리
+SELECT DEPTNO, SAL
+FROM EMP
+; -- 비교열
+
+SELECT *
+FROM EMP
+WHERE (DEPTNO, SAL) IN (SELECT DEPTNO, MAX(SAL)
+							FROM EMP 
+							GROUP BY DEPTNO
+						)
+; -- 두 컬럼의 조건을 충족하는 데이터 전체조회 :: 부서별 최고 임금자들을 출력
+
+/*
+ CREATE TABLE : 테이블 구조/형태를 신규로 생성
+ 
+ 기존 동일한 테이블 이름이 있는 경우, 에러 발생
+ DROP TABLE ... 을 통해 삭제 후 재생성 필요
+ */
+DROP TABLE EMP_NEW
+;
+
+CREATE TABLE EMP_NEW 
+(
+EMPNO NUMBER(4)        --4자리 정수 표현
+, ENAME VARCHAR2(10)   --가변 문자열 10자리
+, JOB VARCHAR2(9)
+, MGR NUMBER(4)        --EMPNO와 동일한 사번
+, HIREDATE DATE        --계산이 가능한 날짜
+, SALGRADE NUMBER(7, 2)     --소수점 2자리 정밀도 처리
+, COMM NUMBER(7, 2)
+, DEPTNO NUMBER(2)     --2자리 정수
+);
+
+ALTER TABLE EMP_NEW RENAME COLUMN SALGRADE TO SAL;
+
+SELECT *
+FROM EMP_NEW
+;
+
+ALTER TABLE EMP_NEW ADD TEL VARCHAR(20);
+COMMIT;
+
+ALTER TABLE EMP_NEW 
+MODIFY EMPNO NUMBER(5)  -- 기존 4자리 정수에서 5자리로 확대
+;
+COMMIT;
+
+ALTER TABLE EMP_NEW 
+DROP COLUMN TEL
+;
+COMMIT
+;
+
+ALTER TABLE EMP_NEW
+RENAME TO EMP_NEW_RENAMED
+; -- 테이블명 변경
+
+
+-- SEQUENCE 생성 :: 일련번호 사용
+-- 특정 규칙에 따라 생성되는 연속 숫자를 생성하는 객체
+CREATE SEQUENCE SEQ_DEPTSEQ --- SEQUENCE며
+		INCREMENT BY 1      --- 증가값(기본1)
+		START WITH 1        --- 시작값(기본1)
+		MAXVALUE 99			--- 최대값
+		MINVALUE 1			--- 최소값
+		NOCYCLE NOCACHE     --- NOCYCLE(최대값에서 중단) / NOCACHE(값 미리 생성(기본20개)
+;
+
+SELECT *
+FROM DEPT_TEMP2
+;
+
+INSERT INTO DEPT_TEMP2
+VALUES (SEQ_DEPTSEQ.NEXTVAL, 'DB', 'BUSAN')
+;  -- 만들어둔 SEQUENCE로 데이터 입력.  기존 테이블에 PRIMARY KEY 지정이 없다면 가능함. 있다면 불가했겠죠.
+
+
